@@ -40,15 +40,11 @@ import "context"
 // but are periodically notified of latest events
 
 // Participant is a producer or consumer in a bus
-type Participant interface {
+type BusParticipant interface {
 	// BusUUID returns the uuid of the bus this is a participant for
 	BusUUID() UUID
 	// ParticipantID returns the ID of this participant
-	ParticipantID() ParticipantID
-	// ParticipantKey returns the key for this bus registered by the participant.
-	// The key is an identifier for the bus that has meaning for the participant
-	// -- used to associate the bus to other code the participant is working with
-	ParticipantKey() ParticipantKey
+	Participant() Participant
 }
 
 // CanConsume is any entity that can consume events on the bus
@@ -91,21 +87,44 @@ type CanPublish interface {
 
 // Producer is a participant in a bus that publishes events
 type Producer interface {
-	Participant
+	BusParticipant
 	CanPublish
 }
 
 // Consumer is a participant in a bus that consumes events
 type Consumer interface {
-	Participant
+	BusParticipant
 	CanConsume
 }
 
 // ProducerConsumer is a participant in a bus that publishes and consumes events
 type ProducerConsumer interface {
-	Participant
+	BusParticipant
 	CanPublish
 	CanConsume
+}
+
+// Bus is an individual bus that maintains a single order of events
+type Bus interface {
+	UUID()
+	// AddParticpant adds a new particpant for a bus
+	// It will error if a participant of the same type exists for this bus
+	// If this bus was created from a collection, it will error if the particpant is
+	// not unique to the collection
+	AddParticipant(Participant) error
+	// ProducerConsumer returns a producer/consumer interface for the given participant
+	ProducerConsumer(Participant) (ProducerConsumer, error)
+	// ProducerConsumer returns a producer interface for the given participant
+	Producer(Participant) (Producer, error)
+	// Consumer returns a consumer interface for the given partipant
+	Consumer(Participant) (Consumer, error)
+	// AddObserver adds a observer for the given event types for this bus
+	// It replays whatever events are still in an in memory or on disk queue for the given bus
+	AddObserver(eventTypes []EventType, observer Observer)
+	// SetFailureHandler sets the failure handler for the bus
+	// This is called when the bus see a failure to process events for a given
+	// participant as defined by the buses failure policy
+	SetFailureHandler(FailureHandler)
 }
 
 // Collection is a group of event buses that each maintain their own independent strongly
@@ -124,32 +143,12 @@ type ProducerConsumer interface {
 type Collection interface {
 	// CreateNewBus creates a new Bus and returns its UUID
 	// It takes a list of policies under which it will declare a consumer "failed"
-	CreateNewBus(failurePolicy []FailureCondition) (UUID, error)
-	// AddProducerConsumer adds a new ProducerConsumer to a bus with the given ParticipantID and ParticipantKey
-	// If the given bus already has the given ParticipantID registered, this method will error
-	// It returns the interface to produce and consume events
-	AddBusProducerConsumer(busUUID UUID, participantID ParticipantID, participant ParticipantKey) (ProducerConsumer, error)
-	// TBD: Do we need these methods or is everyone a ProducerConsumer???
-	// AddProducer adds a new Producer to a bus with the given ParticipantID and ParticipantKey
-	// If the given bus already has the given ParticipantID registered, this method will error
-	// It returns the interface to produce events
-	AddBusProducer(busUUID UUID, participantID ParticipantID, participant ParticipantKey) (Producer, error)
-	// AddConsumer adds a new Consumer to a bus with the given ParticipantID and ParticipantKey
-	// If the given bus already has the given ParticipantID registered, this method will error
-	// It returns the interface to consume events
-	AddBusConsumer(busUUID UUID, participantID ParticipantID, participant ParticipantKey) (Consumer, error)
-	// GetBusProducerConsumer finds a bus that contains the given ParticipantID and ParticipantKey
-	// And returns an interface to produce and consume events
-	// This might be used to restart processing of events on restart
-	GetBusProducerConsumer(participantID ParticipantID, participant ParticipantKey) (ProducerConsumer, bool, error)
-	// GetBusProducer finds a bus that contains the given ParticipantID and ParticipantKey
-	// And returns an interface to produce events
-	// This might be used to restart processing of events on restart
-	GetBusProducer(participantID ParticipantID, participant ParticipantKey) (Producer, bool, error)
-	// GetBusConsumer finds a bus that contains the given ParticipantID and ParticipantKey
-	// And returns an interface to consume events
-	// This might be used to restart processing of events on restart
-	GetBusConsumer(participantID ParticipantID, participant ParticipantKey) (Consumer, bool, error)
+	CreateNewBus(failurePolicy []FailureCondition) (Bus, error)
+	// GetByUUID returns the bus with the given UUID
+	GetByUUID(UUID) (Bus, error)
+	// GetBusByParticipant find the bus that contains the unique particpant
+	// (useful for relocating a bus without having to find a UUID)
+	GetBusByParticpant(Participant) (Bus, error)
 
 	// AddObserver adds an observer for the given event types across all buses.
 	// Observers have different characteristics to consumers
@@ -159,18 +158,14 @@ type Collection interface {
 	// - they ALWAYS receive events after ALL consumers consume or skip them
 	// For AddObserver, it only observes events published after it's added
 	AddObserver(eventTypes []EventType, observer Observer)
-	// AddBusObserver adds a observer for the given event types for the given bus
-	// It replays whatever events are still in an in memory or on disk queue for the given bus
-	AddBusObserver(busUUID UUID, eventTypes []EventType, observer Observer)
+
 	// DeleteBus shuts down a bus. Since buses are relatively transient (length of a transfer), we should be able
 	// to shut down and throw away a bus and all its events. Any existing ProducerConsumer/Producer/Consumer instances
 	// will just return errors on their methods
 	DeleteBus(context.Context, UUID) error
 
-	// SetFailureHandler establishes a failure handler for the given bus
-	// This is called when the bus see a failure to process events for a given
-	// participant as defined by the buses failure policy
-	SetFailureHandler(busUUID UUID, handler FailureHandler)
+	// SetDefaultFailureHandler sets the default failure handler for all newly created buses
+	SetDefaultFailureHandler(FailureHandler)
 }
 
 // Persistence thoughts:
@@ -200,8 +195,7 @@ type EventData interface{}
 type Event interface {
 	BusUUID() UUID
 	Position() Position
-	PublisherID() ParticipantID
-	PublisherKey() ParticipantKey
+	Publisher() Participant
 	Type() EventType
 	Data() EventData
 }
@@ -226,16 +220,36 @@ type FailureCondition interface{}
 // It may not get called on every event and instead may send multiple events at once
 type Observer func([]Event)
 
-// ParticipantID is an identifier for a given participant in a queue
-type ParticipantID interface{}
+// Participant is a unique producer/consumer for a specific bus instance
+//
+// The type identifies the name of the external service producing/consuming events
+// A single service should use the same name for all the buses it produces/consumes
+// events on
+//
+// The LocalID identifies the local state managed by the service that is associated
+// with this specific bus (example: if the service maintains a collection of state, and each
+// instance of state in the collection is associated with one event bus, the local id
+// might be an index into the collection)
+// A single service would use a different and hopefully unique LocalID for every
+// bus it interacts with
+//
+// A Participant (containing both type and local id) should be able to uniquely
+// identified a bus in a collection
+type Participant struct {
+	Type    ParticipantType
+	LocalID ParticipantLocalID
+}
 
-// ParticipantKey is an piece of data a given participant can use to associate the
+// ParticipantType is an identifier for a given participant in a queue
+type ParticipantType interface{}
+
+// ParticipantLocalID is an piece of data a given participant can use to associate the
 // given bus with it's own local data or state
-type ParticipantKey interface{}
+type ParticipantLocalID interface{}
 
 // FailureHandler receives failures for a bus and decides what to do with it
 type FailureHandler interface {
-	HandleFailure(UUID, ParticipantID, ParticipantKey, error, RecoveryOptions)
+	HandleFailure(UUID, Participant, error, RecoveryOptions)
 }
 
 // RecoveryOptions are actions a failure handler can choose to take
