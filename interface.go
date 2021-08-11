@@ -7,7 +7,7 @@ import "context"
 // A bus is single strongly ordered queue of events.
 
 // Publishers publish events to a bus. The order of published events is always
-// strongly consistent. If two seperate publishers publish an event
+// strongly consistent. If two separate publishers publish an event
 // at the same time, one call will block until the other is able to finish
 // putting the event n the queue, so that the ordering of events is strongly consistent.
 
@@ -17,7 +17,7 @@ import "context"
 // so that position of the next event to be consumed in the bus's queue is only
 // eventually consistent among the subscribers.
 //
-// However, a event Publisher can force a synchronozation upon publishing an event
+// However, a event Publisher can force a synchronization upon publishing an event
 // so that the position of next consumable event in the queue becomes strongly
 // consistent among all Consumers -- namely at the position immediately following the
 // published event. When this happens, Consumers that reach the checkpointed event in
@@ -29,7 +29,7 @@ import "context"
 // Each Bus has a unique UUID.
 //
 // Since synchronous events represent a deadlock risk, each bus is setup with a
-// failure policy -- this defines the conditions underwhich a particular consumer
+// failure policy -- this defines the conditions under which a particular consumer
 // is considered to be no longer consuming events properly. This can be maximum time
 // waiting for a synchronous event to be processed, or a maximum number events behind
 // the current position. When this occurs a recovery handler is called that can
@@ -72,18 +72,18 @@ type CanConsume interface {
 
 // CanPublish is an entity that can publish events on a bus
 type CanPublish interface {
-	// PublishEvent publishes an event on the bus to be consumed asychronously
+	// PublishEvent publishes an event on the bus to be consumed asynchronously
 	// by consumers.
 	// It will block until any calls to PublishEvent that are in progress finish and
 	// then return after the event is published in sequence after those calls
-	// If a PublishSyncronousEvent is in progress, PublishEvent will block until PublishSynchronousEvent
+	// If a PublishSynchronousEvent is in progress, PublishEvent will block until PublishSynchronousEvent
 	// puts the event in the queue, but not until the consumers catch up. It will then publish the event
 	// in the queue. But the event will not become available to consumers until all of them catch up to
-	// the sychronoization checkpoint.
-	// In other words, you can still publish while a syncrhonization is occuring, but no one sees your
+	// the synchronization checkpoint.
+	// In other words, you can still publish while a synchronization is occurring, but no one sees your
 	// event until everyone is synchronized
 	PublishEvent(EventType, EventData) error
-	// PublishSycronousEvent publishs an event an sets it up as a sychronization checkpoint
+	// PublishSynchronousEvent publishes an event an sets it up as a synchronization checkpoint
 	// It will not return until the event is published AND all consumers catch up to the synchronization
 	// checkpoint.
 	PublishSynchronousEvent(EventType, EventData) error
@@ -126,7 +126,7 @@ type Collection interface {
 	// It takes a list of policies under which it will declare a consumer "failed"
 	CreateNewBus(failurePolicy []FailureCondition) (UUID, error)
 	// AddProducerConsumer adds a new ProducerConsumer to a bus with the given ParticipantID and ParticipantKey
-	// If the given bus already has the given ParticipantID regustered, this method will error
+	// If the given bus already has the given ParticipantID registered, this method will error
 	// It returns the interface to produce and consume events
 	AddBusProducerConsumer(busUUID UUID, participantID ParticipantID, participant ParticipantKey) (ProducerConsumer, error)
 	// TBD: Do we need these methods or is everyone a ProducerConsumer???
@@ -135,7 +135,7 @@ type Collection interface {
 	// It returns the interface to produce events
 	AddBusProducer(busUUID UUID, participantID ParticipantID, participant ParticipantKey) (Producer, error)
 	// AddConsumer adds a new Consumer to a bus with the given ParticipantID and ParticipantKey
-	// If the given bus already has the given ParticipantID regustered, this method will error
+	// If the given bus already has the given ParticipantID registered, this method will error
 	// It returns the interface to consume events
 	AddBusConsumer(busUUID UUID, participantID ParticipantID, participant ParticipantKey) (Consumer, error)
 	// GetBusProducerConsumer finds a bus that contains the given ParticipantID and ParticipantKey
@@ -154,8 +154,8 @@ type Collection interface {
 	// AddObserver adds an observer for the given event types across all buses.
 	// Observers have different characteristics to consumers
 	// They simply receive periodic updates about events that have happened
-	// The only gaurantees are:
-	// - they receive events in order groups per bus (no gaurantee about ordering between buses)
+	// The only guarantees are:
+	// - they receive events in order groups per bus (no guarantee about ordering between buses)
 	// - they ALWAYS receive events after ALL consumers consume or skip them
 	// For AddObserver, it only observes events published after it's added
 	AddObserver(eventTypes []EventType, observer Observer)
@@ -196,7 +196,7 @@ type EventType interface{}
 // It can be any arbitrary data
 type EventData interface{}
 
-// Event is an event in a bus quuue
+// Event is an event in a bus queue
 type Event interface {
 	BusUUID() UUID
 	Position() Position
@@ -241,6 +241,6 @@ type FailureHandler interface {
 // RecoveryOptions are actions a failure handler can choose to take
 // when a consumer fails
 type RecoveryOptions interface {
-	EvictPartipant() error
+	EvictParticipant() error
 	FailBus() error
 }
