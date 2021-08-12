@@ -41,14 +41,14 @@ import "context"
 
 // BusParticipant is a producer or consumer in a bus
 type BusParticipant interface {
-	// BusUUID returns the uuid of the bus this is a participant for
-	BusUUID() UUID
 	// ParticipantID returns the ID of this participant
 	Participant() Participant
+	Bus() Bus
 }
 
-// CanConsume is any entity that can consume events on the bus
-type CanConsume interface {
+// Consumer is a participant in a bus that consumes events
+type Consumer interface {
+	BusParticipant
 	// AddEventInterests adds events types that this consumer is interested in.
 	// Events published prior to the current queue position are NOT
 	// affected
@@ -70,8 +70,9 @@ type CanConsume interface {
 	RemoveEventInterests([]EventType) error
 }
 
-// CanPublish is an entity that can publish events on a bus
-type CanPublish interface {
+// Producer is a participant in a bus that publishes events
+type Producer interface {
+	BusParticipant
 	// PublishEvent publishes an event on the bus to be consumed asynchronously
 	// by consumers.
 	// It will block until any calls to PublishEvent that are in progress finish and
@@ -88,18 +89,6 @@ type CanPublish interface {
 	// It returns a channel that will emit once and close when the synchronization is complete
 	// or has errored with a final error status
 	PublishSynchronousEvent(EventType, EventData) <-chan error
-}
-
-// Producer is a participant in a bus that publishes events
-type Producer interface {
-	BusParticipant
-	CanPublish
-}
-
-// Consumer is a participant in a bus that consumes events
-type Consumer interface {
-	BusParticipant
-	CanConsume
 }
 
 // Bus is an individual bus that maintains a single order of events
