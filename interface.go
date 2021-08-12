@@ -97,27 +97,23 @@ type Consumer interface {
 	CanConsume
 }
 
-// ProducerConsumer is a participant in a bus that publishes and consumes events
-type ProducerConsumer interface {
-	BusParticipant
-	CanPublish
-	CanConsume
-}
-
 // Bus is an individual bus that maintains a single order of events
 type Bus interface {
 	UUID()
-	// AddParticpant adds a new particpant for a bus
-	// It will error if a participant of the same type exists for this bus
+	// CreateProducerConsumer creates a new producer consumer for a bus
+	// It will error if a producer participant of the same type exists for this bus
 	// If this bus was created from a collection, it will error if the particpant is
 	// not unique to the collection
-	AddParticipant(Participant) error
-	// ProducerConsumer returns a producer/consumer interface for the given participant
-	ProducerConsumer(Participant) (ProducerConsumer, error)
-	// ProducerConsumer returns a producer interface for the given participant
-	Producer(Participant) (Producer, error)
-	// Consumer returns a consumer interface for the given partipant
-	Consumer(Participant) (Consumer, error)
+	CreateProducer(Participant) (Producer, error)
+	// CreateConsumer creates a consumer for a bus
+	// It will error if a consumer participant of the same type exists for this bus
+	// If this bus was created from a collection, it will error if the particpant is
+	// not unique to the collection
+	CreateConsumer(Participant) (Consumer, error)
+	// LookupProducer returns am existing Producer
+	LookupProducer(Participant) (Producer, error)
+	// LookupConsumer returns an existing Consumer
+	LookupConsumer(Participant) (Consumer, error)
 	// AddObserver adds a observer for the given event types for this bus
 	// It replays whatever events are still in an in memory or on disk queue for the given bus
 	AddObserver(eventTypes []EventType, observer Observer)
