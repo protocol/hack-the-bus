@@ -39,7 +39,7 @@ import "context"
 // Buses also have observers. Observers do not participate in the event consumption process
 // but are periodically notified of latest events
 
-// Participant is a producer or consumer in a bus
+// BusParticipant is a producer or consumer in a bus
 type BusParticipant interface {
 	// BusUUID returns the uuid of the bus this is a participant for
 	BusUUID() UUID
@@ -55,11 +55,15 @@ type CanConsume interface {
 	AddEventInterests([]EventType)
 	// CurrentPosition is order in the queue of the next event
 	CurrentPosition() Position
-	// NextConsumableEvent returns the next event to be consumed
-	// it returns a channel that will emit a single value when the
-	// next event is available. If there is an event available already
-	// the channel will emit immediately.
-	NextConsumableEvent() <-chan ConsumableEventResult
+	// EventsAvailable returns a channel that returns as soon as at least
+	// one event is available to be consumed
+	WaitForAvailableEvent() <-chan error
+	// AvailableEvents returns all relevant events between the current consumed position and
+	// the end of the queue
+	AvailableEvents() []Event
+	// ConsumeEvents advances the position forward offset, considering these events
+	// consumed
+	ConsumeEvents(offset Offset)
 	// RemoveEventInterests adds event types that this consumer is interested in.
 	// Events published prior to the current queue position are NOT
 	// affected
@@ -180,6 +184,10 @@ type UUID string
 // given bus
 type Position uint64
 
+// Offset is the amount to move the position of a consumer forward, considering
+// the events before consumed
+type Offset uint64
+
 // EventType describes a kind of event
 // event types are generally used to delineate what events a consumer/observer is interested in
 type EventType interface{}
@@ -195,18 +203,6 @@ type Event interface {
 	Publisher() Participant
 	Type() EventType
 	Data() EventData
-}
-
-// ConsumableEvent is an event that can be marked consumed
-type ConsumableEvent interface {
-	Event
-	MarkConsumed()
-}
-
-// ConsumableEventResult is the result type of calling NextConsumableEvent
-type ConsumableEventResult interface {
-	Event() ConsumableEvent
-	Error() error
 }
 
 // FailureCondition is a condition on which
