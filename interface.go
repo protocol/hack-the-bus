@@ -100,7 +100,7 @@ type Consumer interface {
 // Bus is an individual bus that maintains a single order of events
 type Bus interface {
 	UUID()
-	// CreateProducerConsumer creates a new producer consumer for a bus
+	// CreateProducer creates a new producer for a bus
 	// It will error if a producer participant of the same type exists for this bus
 	// If this bus was created from a collection, it will error if the particpant is
 	// not unique to the collection
