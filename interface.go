@@ -80,9 +80,10 @@ type CanPublish interface {
 	// event until everyone is synchronized
 	PublishEvent(EventType, EventData) error
 	// PublishSynchronousEvent publishes an event an sets it up as a synchronization checkpoint
-	// It will not return until the event is published AND all consumers catch up to the synchronization
-	// checkpoint.
-	PublishSynchronousEvent(EventType, EventData) error
+	// It will return when the event is published
+	// It returns a channel that will emit once and close when the synchronization is complete
+	// or has errored with a final error status
+	PublishSynchronousEvent(EventType, EventData) <-chan error
 }
 
 // Producer is a participant in a bus that publishes events
