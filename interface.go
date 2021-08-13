@@ -47,23 +47,29 @@ type BusParticipant interface {
 }
 
 // Consumer is a participant in a bus that consumes events
+// Consumers have a "consumed position" and a "position"
+// "consumed position" is indicates the last position of the events
+// a consumer has "processed" and is done with
+// "position" indicates the last event seen by the consumer, whether or not
+// they've indicated they are "done" processing the event
 type Consumer interface {
 	BusParticipant
 	// AddEventInterests adds events types that this consumer is interested in.
 	// Events published prior to the current queue position are NOT
 	// affected
-	AddEventInterests([]EventType)
-	// CurrentPosition is order in the queue of the next event
-	CurrentPosition() Position
-	// EventsAvailable returns a channel that returns as soon as at least
-	// one event is available to be consumed
-	WaitForAvailableEvent() <-chan error
-	// AvailableEvents returns all relevant events between the current consumed position and
-	// the end of the queue
-	AvailableEvents() []Event
-	// ConsumeEvents advances the position forward offset, considering these events
-	// consumed
-	ConsumeEvents(offset Offset)
+	AddEventInterests([]EventType) error
+	// ConsumedPosition is the position of events already consumed
+	ConsumedPosition() Position
+	// Position indicates the position in the queue after the last call to
+	// NextAvailableEvents
+	Position() Position
+	// NextAvailableEvents polls the event queue for more available events and returns them
+	// once they are available.
+	// If any events are available, they will be returned immediately
+	// The next call to NextEvents will return where the last call left off
+	NextEvents() <-chan NextEvents
+	// ConsumedEvents marks the consumer as having processed events.
+	ConsumeEvents(offset Offset) error
 	// RemoveEventInterests adds event types that this consumer is interested in.
 	// Events published prior to the current queue position are NOT
 	// affected
@@ -110,7 +116,7 @@ type Bus interface {
 	LookupConsumer(Participant) (Consumer, error)
 	// AddObserver adds a observer for the given event types for this bus
 	// It replays whatever events are still in an in memory or on disk queue for the given bus
-	AddObserver(eventTypes []EventType, observer Observer)
+	AddObserver(eventTypes []EventType, observer Observer) error
 	// SetFailureHandler sets the failure handler for the bus
 	// This is called when the bus see a failure to process events for a given
 	// participant as defined by the buses failure policy
@@ -147,7 +153,7 @@ type Collection interface {
 	// - they receive events in order groups per bus (no guarantee about ordering between buses)
 	// - they ALWAYS receive events after ALL consumers consume or skip them
 	// For AddObserver, it only observes events published after it's added
-	AddObserver(eventTypes []EventType, observer Observer)
+	AddObserver(eventTypes []EventType, observer Observer) error
 
 	// DeleteBus shuts down a bus. Since buses are relatively transient (length of a transfer), we should be able
 	// to shut down and throw away a bus and all its events. Any existing ProducerConsumer/Producer/Consumer instances
@@ -192,6 +198,12 @@ type Event interface {
 	Publisher() Participant
 	Type() EventType
 	Data() EventData
+}
+
+// NextEvents is the eventual result of calling next events
+type NextEvents interface {
+	Events() []Event
+	Error() error
 }
 
 // FailureCondition is a condition on which
