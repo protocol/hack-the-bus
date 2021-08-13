@@ -81,20 +81,20 @@ type Producer interface {
 	BusParticipant
 	// PublishEvent publishes an event on the bus to be consumed asynchronously
 	// by consumers.
-	// It will block until any calls to PublishEvent that are in progress finish and
-	// then return after the event is published in sequence after those calls
-	// If a PublishSynchronousEvent is in progress, PublishEvent will block until PublishSynchronousEvent
-	// puts the event in the queue, but not until the consumers catch up. It will then publish the event
-	// in the queue. But the event will not become available to consumers until all of them catch up to
+	// It returns a channel that returns when the event is published
+	// The event will not publish until any calls to PublishEvent that are in progress
+	// finish. The channel will emit when the event is published after other calls that were in progress
+	// If a PublishSynchronousEvent is in progress, PublishEvent will still succeed,
+	// but the event will not become available to consumers until all of them catch up to
 	// the synchronization checkpoint.
 	// In other words, you can still publish while a synchronization is occurring, but no one sees your
 	// event until everyone is synchronized
-	PublishEvent(EventType, EventData) error
+	PublishEvent(EventType, EventData) <-chan error
 	// PublishSynchronousEvent publishes an event an sets it up as a synchronization checkpoint
-	// It will return when the event is published
-	// It returns a channel that will emit once and close when the synchronization is complete
+	// It will return two channels -- one that emits first when the event is
+	// published, and one that emits when when the synchronization is complete
 	// or has errored with a final error status
-	PublishSynchronousEvent(EventType, EventData) <-chan error
+	PublishSynchronousEvent(EventType, EventData) (published <-chan error, synchrononized <-chan error)
 }
 
 // Bus is an individual bus that maintains a single order of events
