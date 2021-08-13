@@ -48,7 +48,7 @@ type BusParticipant interface {
 
 // Consumer is a participant in a bus that consumes events
 // Consumers have a "consumed position" and a "position"
-// "consumed position" is indicates the last position of the events
+// "consumed position" indicates the last position of the events
 // a consumer has "processed" and is done with
 // "position" indicates the last event seen by the consumer, whether or not
 // they've indicated they are "done" processing the event
