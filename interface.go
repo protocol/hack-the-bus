@@ -58,18 +58,19 @@ type Consumer interface {
 	// Events published prior to the current queue position are NOT
 	// affected
 	AddEventInterests([]EventType) error
-	// ConsumedPosition is the position of events already consumed
-	ConsumedPosition() Position
+	// CommittedPosition is the position of events already consumed
+	CommittedPosition() Position
 	// Position indicates the position in the queue after the last call to
-	// NextAvailableEvents
+	// NextEvents
 	Position() Position
-	// NextAvailableEvents polls the event queue for more available events and returns them
+	// NextEvents polls the event queue for more available events and returns them
 	// once they are available.
 	// If any events are available, they will be returned immediately
 	// The next call to NextEvents will return where the last call left off
 	NextEvents() <-chan NextEvents
-	// ConsumedEvents marks the consumer as having processed events.
-	ConsumeEvents(offset Offset) error
+	// Commit marks the given position as the point at which all prior events,
+	// including the event at the given position, are processed.
+	Commit(position Position) error
 	// RemoveEventInterests adds event types that this consumer is interested in.
 	// Events published prior to the current queue position are NOT
 	// affected
@@ -178,10 +179,6 @@ type UUID string
 // You can think of Position as describing relative time ordering within a
 // given bus
 type Position uint64
-
-// Offset is the amount to move the position of a consumer forward, considering
-// the events before consumed
-type Offset uint64
 
 // EventType describes a kind of event
 // event types are generally used to delineate what events a consumer/observer is interested in

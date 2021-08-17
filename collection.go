@@ -6,6 +6,8 @@ import (
 	"github.com/google/uuid"
 )
 
+var _ Collection = (*defaultCollection)(nil)
+
 type defaultCollection struct {
 	buses map[UUID]*defaultBus
 	dfh   FailureHandler
@@ -13,7 +15,9 @@ type defaultCollection struct {
 }
 
 func NewCollection() Collection {
-	return &defaultCollection{}
+	return &defaultCollection{
+		buses: make(map[UUID]*defaultBus),
+	}
 }
 
 func (c *defaultCollection) CreateNewBus(fc []FailureCondition) (Bus, error) {
@@ -22,14 +26,13 @@ func (c *defaultCollection) CreateNewBus(fc []FailureCondition) (Bus, error) {
 		return nil, err
 	}
 	id := UUID(uid.String())
-	bus := &defaultBus{
-		id: id,
-		fc: fc,
-		fh: c.dfh,
-	}
+	bus := newDefaultBus(id, fc, 100) // TODO make max in-flight events configurable
+	bus.SetFailureHandler(c.dfh)
 	// Add existing observers, if any.
 	for _, o := range c.obs {
-		bus.AddObserver(o.et, o.o)
+		if err := bus.AddObserver(o.et, o.o); err != nil {
+			return nil, err
+		}
 	}
 	c.buses[id] = bus
 	return bus, nil
@@ -56,11 +59,14 @@ func (c *defaultCollection) GetBusByParticipant(p Participant) (Bus, error) {
 	return nil, fmt.Errorf("no bus found for participant: %v", p)
 }
 
-func (c *defaultCollection) AddObserver(et []EventType, o Observer) {
+func (c *defaultCollection) AddObserver(et []EventType, o Observer) error {
 	c.obs = append(c.obs, &observerWithInterests{et: et, o: o})
 	for _, bus := range c.buses {
-		bus.AddObserver(et, o)
+		if err := bus.AddObserver(et, o); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func (c *defaultCollection) DeleteBus(ctx context.Context, uuid UUID) error {
