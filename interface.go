@@ -29,7 +29,7 @@ import "context"
 // Each Bus has a unique UUID.
 //
 // Since synchronous events represent a deadlock risk, each bus is setup with a
-// failure policy -- this defines the conditions under which a particular consumer
+// failure condition -- this defines the conditions under which a particular consumer
 // is considered to be no longer consuming events properly. This can be maximum time
 // waiting for a synchronous event to be processed, or a maximum number events behind
 // the current position. When this occurs a recovery handler is called that can
@@ -58,18 +58,19 @@ type Consumer interface {
 	// Events published prior to the current queue position are NOT
 	// affected
 	AddEventInterests([]EventType) error
-	// ConsumedPosition is the position of events already consumed
-	ConsumedPosition() Position
+	// CommittedPosition is the position of events already consumed
+	CommittedPosition() Position
 	// Position indicates the position in the queue after the last call to
-	// NextAvailableEvents
+	// NextEvents
 	Position() Position
-	// NextAvailableEvents polls the event queue for more available events and returns them
+	// NextEvents polls the event queue for more available events and returns them
 	// once they are available.
 	// If any events are available, they will be returned immediately
 	// The next call to NextEvents will return where the last call left off
 	NextEvents() <-chan NextEvents
-	// ConsumedEvents marks the consumer as having processed events.
-	ConsumeEvents(offset Offset) error
+	// Commit marks the given position as the point at which all prior events,
+	// including the event at the given position, are processed.
+	Commit(position Position) error
 	// RemoveEventInterests adds event types that this consumer is interested in.
 	// Events published prior to the current queue position are NOT
 	// affected
@@ -99,18 +100,18 @@ type Producer interface {
 
 // Bus is an individual bus that maintains a single order of events
 type Bus interface {
-	UUID()
+	UUID() UUID
 	// CreateProducer creates a new producer for a bus
 	// It will error if a producer participant of the same type exists for this bus
-	// If this bus was created from a collection, it will error if the particpant is
+	// If this bus was created from a collection, it will error if the participant is
 	// not unique to the collection
 	CreateProducer(Participant) (Producer, error)
 	// CreateConsumer creates a consumer for a bus
 	// It will error if a consumer participant of the same type exists for this bus
-	// If this bus was created from a collection, it will error if the particpant is
+	// If this bus was created from a collection, it will error if the participant is
 	// not unique to the collection
 	CreateConsumer(Participant) (Consumer, error)
-	// LookupProducer returns am existing Producer
+	// LookupProducer returns an existing Producer
 	LookupProducer(Participant) (Producer, error)
 	// LookupConsumer returns an existing Consumer
 	LookupConsumer(Participant) (Consumer, error)
@@ -119,7 +120,7 @@ type Bus interface {
 	AddObserver(eventTypes []EventType, observer Observer) error
 	// SetFailureHandler sets the failure handler for the bus
 	// This is called when the bus see a failure to process events for a given
-	// participant as defined by the buses failure policy
+	// participant as defined by the bus's failure condition
 	SetFailureHandler(FailureHandler)
 }
 
@@ -138,13 +139,13 @@ type Bus interface {
 // multiple collections for storage and retrieval)
 type Collection interface {
 	// CreateNewBus creates a new Bus and returns its UUID
-	// It takes a list of policies under which it will declare a consumer "failed"
-	CreateNewBus(failurePolicy []FailureCondition) (Bus, error)
+	// It takes a list of conditions under which it will declare a consumer "failed"
+	CreateNewBus(failureConditions []FailureCondition) (Bus, error)
 	// GetByUUID returns the bus with the given UUID
 	GetByUUID(UUID) (Bus, error)
-	// GetBusByParticipant find the bus that contains the unique particpant
+	// GetBusByParticipant find the bus that contains the unique participant
 	// (useful for relocating a bus without having to find a UUID)
-	GetBusByParticpant(Participant) (Bus, error)
+	GetBusByParticipant(Participant) (Bus, error)
 
 	// AddObserver adds an observer for the given event types across all buses.
 	// Observers have different characteristics to consumers
@@ -178,10 +179,6 @@ type UUID string
 // You can think of Position as describing relative time ordering within a
 // given bus
 type Position uint64
-
-// Offset is the amount to move the position of a consumer forward, considering
-// the events before consumed
-type Offset uint64
 
 // EventType describes a kind of event
 // event types are generally used to delineate what events a consumer/observer is interested in
